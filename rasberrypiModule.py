@@ -11,7 +11,7 @@ from datetime import datetime
 from GPio import IO
 from Character import Char
 from ServerData import Data
-
+from Pipe import pipe
 import os
 import signal
 svData = Data()
@@ -20,6 +20,9 @@ IO_ = IO()
 GUI = Char()
 Signal = IO_.signalQue
 outputQue = IO_.OutputQue
+
+# connect Pipe Line
+pp = pipe()
 
 def main():
     global cam
@@ -34,17 +37,17 @@ def main():
     atexit.register(exit_handler,signal)
     bCameraOn = False
     cam.bRecordQue = True
-    CameraProcess = Process(target=Camera_Start_,args=(Signal,))
-    SensorProcess = Process(target =IO_.Input,args=(Signal,outputQue,))
-    ServerDataProcess = Process(target = svData.Data_Loop,args = (outputQue,))
+    CameraProcess = Process(target=Camera_Start_,args=(Signal,pp,))
+    SensorProcess = Process(target =IO_.Input,args=(Signal,outputQue,pp,))
+    #ServerDataProcess = Process(target = svData.Data_Loop,args = (outputQue,))
     ThermalCameraProcess = Process(target = IO_.Port_.Thermal_Loop,args=(outputQue,))
     CameraProcess.start()
     SensorProcess.start()
-    ServerDataProcess.start()
+    #ServerDataProcess.start()
     ThermalCameraProcess.start()
     CameraProcess.join()
     SensorProcess.join()
-    ServerDataProcess.join()
+    #ServerDataProcess.join()
     ThermalCameraProcess.join()
 
 def exit_handler(self,bsignal):
@@ -88,7 +91,7 @@ def exit_handler(self,bsignal):
     return
     
 
-def Camera_Start_(Signal):
+def Camera_Start_(Signal,pp):
     
     global cam
     global bCameraOn
@@ -100,6 +103,8 @@ def Camera_Start_(Signal):
     bRecordStart = True
     startTime = 0
     endTime = 0
+    set_time = 180
+    
     
     now = datetime.now()
     strTime = now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -114,8 +119,9 @@ def Camera_Start_(Signal):
         bRecordStart = False
         print("Camera Start")
         while(bCameraOn):
-            try:
+                
             # Time initial per Thread tic
+                post = pp.receive()
                 now = datetime.now()
                 strTime = now.strftime('%Y_%m_%d_%H_%M_%S')
                 strMinute = now.minute
@@ -129,14 +135,15 @@ def Camera_Start_(Signal):
                     if not(Signal.empty()):
                         signalData = Signal.get()
                         
-                        if(signalData==1 and bRecord == False):              #Fire signal
+                        if not (bRecord):              #spark signal
                             bRecordStart = True 
                             time.sleep(0.1)
                             startTime = time.time()
-                    
+                            
                     if(signalData == 0):
                         Time = endTime-startTime
-                        if(Time>=10):
+                        # video flag set 3 minute  
+                        if(Time>=set_time):
                             bRecord = False
                             print("Recording video is stop")
                                                                                                    
@@ -153,16 +160,16 @@ def Camera_Start_(Signal):
                         bRecord = True
                         bRecordStart=False
                         # set time three sencond 
-                        p=cam.RecordTS_Start("3")
+                        p=cam.RecordTS_Start("3",post)
                         
                         # show flag status
-                        GUI.progressbar_Start()
+                        GUI.progressbar_Start(set_time)
                     #Record Video
                     if(bRecord):
                         endTime = time.time()
                         Time = endTime-startTime
                         #show flag status in progressbar
-                        GUI.show_progressbar(Time)
+                        GUI.show_progressbar(Time,set_time)
                         #Record start
                         cam.RecordTS(p,frame)    
                         continue
@@ -170,7 +177,6 @@ def Camera_Start_(Signal):
                     endTime = time.time()    
                         
         
-            except:
                 continue               
             
     else:

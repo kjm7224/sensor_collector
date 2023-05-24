@@ -4,22 +4,25 @@ from Post import Connect
 from multiprocessing import Queue,Lock
 from datetime import datetime
 from ThermalCamera import Port
-SignalQue = Queue()
+from multiprocessing import Pipe
 
 lock = Lock()
-Connect_ = Connect()
 class IO():
-    GPIOO = GPIO
-    GPIO.setmode(GPIO.BCM) 
-    signalQue = Queue()
-    OutputQue = Queue()
     def __init__(self):
+        GPIO.setmode(GPIO.BCM)
         self.Fire_Extinguisher_Flag = False
         self.Fire_OUTPUT = 5
         self.LED1 = 2
         self.LED2 = 6
-        self.Fire_flag = False
+        self.high_temp_flag = False
+        self.spark_flag = False
         self.Port_ = Port()
+        self.POST = Connect()
+        self.OutputQue = Queue()
+        self.signalQue = Queue()
+        self.evnet = 0
+        self.threshold_temp = 50
+        self.degrees = 0
         
     def LED_All_TurnDown(self):
         self.LED_TurnDown(self.Fire_OUTPUT)
@@ -28,11 +31,11 @@ class IO():
         
         
     #Led Set Up
-    def Led_SetUp(LED_pin):
+    def Led_SetUp(self,LED_pin):
         GPIO.setup(LED_pin, GPIO.OUT)
         
-    def pin_SetUp(self):
-        GPIO.setup(self,GPIO.IN)
+    def pin_SetUp(self,pin):
+        GPIO.setup(pin,GPIO.IN)
  
     def LED_TurnUP(self,LED_pin):
         GPIO.output(LED_pin,GPIO.HIGH)
@@ -40,76 +43,114 @@ class IO():
     def LED_TurnDown(self,LED_pin):
         GPIO.output(LED_pin,GPIO.LOW)
         
-    def Input(self,signal,output):
+    def Input(self,signal,output,pp):
         try:
             Fire_sensor = 21
             GPIO.setmode(GPIO.BCM) 
-            IO.pin_SetUp(Fire_sensor)
-            FIRESIGNAL = 1
+            self.pin_SetUp(Fire_sensor)
             global endTime
             global startTime
-            IO.Led_SetUp(self.LED1)
-            IO.Led_SetUp(self.LED2)
-            IO.Led_SetUp(self.Fire_OUTPUT)
+            self.Led_SetUp(self.LED1)
+            self.Led_SetUp(self.LED2)
+            self.Led_SetUp(self.Fire_OUTPUT)
             endTime = 0
             startTime=0
-            Current_Signal = 0
-            pre_Signal = 0
+            Cur_event= 0
+            pre_event = 0
             b_pre_Post_Flag = True
-            #initialize Fire edge signal
             
             #for debug..
             while True:
                 try:
-                    time.sleep(0.1)
-                    IO.OutputSignal(self,output)
+                    # post 파이프라인 연결
+                    pp.send(self.POST)
                     
-                    #Fire signal 
-                    Current_Signal=IO.signal_Process(self)   
-                    IO.put_signal_Data(self,FIRESIGNAL,signal,Current_Signal,pre_Signal)
+                    self.OutputSignal(output,signal)
+                    self.set_event()
+                    #################################
+                    ###########점화장치 on###########
+                    #################################
+                    # uppulse
+                    #################################
+                    ###########점화장치 off###########
+                    #################################
+                    # downpulse
+                    
+                    
+                    #high temp signal
+                    self.high_temp_process()   
+                    
+                    #이벤트 변경시 녹화신호
+                    self.put_signal_Data(signal,Cur_event,pre_event)
 
                     #Post regular signal
-                    b_pre_Post_Flag = IO.QuaterPost(self,b_pre_Post_Flag,Current_Signal)
-                    pre_Signal = Current_Signal
+                    b_pre_Post_Flag = self.QuaterPost(b_pre_Post_Flag)
+                    Cur_event = pre_event
                 except:
-                    continue                  
+                    continue
                  
         finally:
             GPIO.cleanup()
         return
 
-    def OutputSignal(self,output):
+    def set_event(self):
+        if not (self.high_temp_flag and self.spark_flag):
+            self.POST.event=0
+            self.evnet = self.POST.event
+            return self.POST.event
+        
+        elif (not self.high_temp_flag and self.spark_flag):
+            self.POST.event=1
+            self.evnet = self.POST.event
+            return self.POST.event
+        
+        elif (self.high_temp_flag and not self.spark_flag):
+            self.POST.event=2
+            self.evnet = self.POST.event
+            return self.POST.event
+        else:
+            self.POST.event=3
+            
+            return self.POST.event
+    
+    def OutputSignal(self,output,signal):
+        # Thermal 카메라의 데이터 테이블 받아오기
         if not(output.empty()):
             outputData = output.get()
             if(outputData == 10):
                 self.Fire_Extinguisher_Flag = True
                 print("Fire extinguihser is started!!!!")
-                IO.Fire_Output(self)
+                self.Fire_Output(self)
                 return 
             if(outputData ==11):
                 print("ALL LED is initialized")
-                IO.LED_All_TurnDown(self)
+                self.LED_All_TurnDown(self)
                 return
-            
-            # detect Fire 
-            if(outputData == 1):
-                self.Fire_flag=True
+            else:
+                # 열화상 카메라 데이터 출력
+                #print(outputData)
+                signal.put(1)
                 
-            if(outputData == 0):
-                self.Fire_flag = False
+            # detect Fire 
+            # dht-11 고온일 경우로 변경
 
-    def Fire_Output(self):
-        IO.LED_TurnUP(self,self.Fire_OUTPUT)
-
-    def regular_Signal(self,cur_sig):
-        if(cur_sig==0):
-            Connect_.sendSignal(0,0,self.Port_.data_table)
-        elif(cur_sig==1):
-            Connect_.sendSignal(0,1,self.Port_.data_table)
-        elif(cur_sig==2):
-            Connect_.sendSignal(1,1,self.Port_.data_table)
-        print("Post send regular signal")
+    def set_status(self):
+        if not (self.high_temp_flag and self.spark_flag):
+            self.POST.status = 0
+            return
+        else:
+            
+            if (self.high_temp_flag or self.spark_flag):
+                if(self.high_temp_flag and self.spark_flag):
+                    self.POST.status = 2
+                    return
+                self.POST.status = 1
+                return
         
+    def Fire_Output(self):
+        self.LED_TurnUP(self,self.Fire_OUTPUT)
+
+
     def Up_Pulse(current_state,previous_state):
         if(current_state == 1 and previous_state == 0):
             return True
@@ -120,35 +161,16 @@ class IO():
             return True
         return False
     
-
+    
   
 
-
-    def put_signal_Data(self,Data_Index,signal,cur_sig,pre_sig):
-    
-        if(cur_sig == 1 and pre_sig == 0):
-            signal.put(Data_Index)
-            Connect_.sendSignal(0,0,self.Port_.data_table)
-            Connect_.sendSignal(1,1,self.Port_.data_table)
-            #Connect_.sendSignal(1,1)
-            
-        elif(cur_sig ==1 and pre_sig ==2):
-            signal.put(Data_Index)
-            Connect_.sendSignal(0,0,self.Port_.data_table)
-            Connect_.sendSignal(1,1,self.Port_.data_table)
-            #Connect_.sendSignal(2,2)
-        elif(cur_sig == 2 and pre_sig == 0):
-            signal.put(Data_Index-1)
-            Connect_.sendSignal(0,1,self.Port_.data_table)
-            Connect_.sendSignal(1,0,self.Port_.data_table)
-            #Connect_.sendSignal(3,3)
-        elif(cur_sig == 2 and pre_sig == 1):
-            signal.put(Data_Index-1)
-            Connect_.sendSignal(0,1,self.Port_.data_table)
-            Connect_.sendSignal(1,0,self.Port_.data_table)
-            #Connect_.sendSignal(4,4)
+    # 이벤트가 달라질 경우에 신호보내기
+    def put_signal_Data(self,signal,cur_evt,pre_evt):
+        if not(cur_evt == pre_evt):
+            signal.put(cur_evt)
         return
-    def QuaterPost(self,b_pre_Post_Flag,cur_sig):
+    
+    def QuaterPost(self,b_pre_Post_Flag):
         now = datetime.now()
         strMinute = now.minute
         if(strMinute%5 == 4):
@@ -157,36 +179,28 @@ class IO():
         
         elif(strMinute%5 == 0 and b_pre_Post_Flag == True):
             b_pre_Post_Flag=False
-            IO.post_evnet(self,cur_sig)
+            self.POST.sendSignal()
             return b_pre_Post_Flag            
         
         
-    def post_evnet(self,cur_sig):
-        if(cur_sig==0):
-            Connect_.sendSignal(0,0,self.Port_.data_table)
-            return
-        elif(cur_sig==1):
-            Connect_.sendSignal(0,1,self.Port_.data_table)
-            return
-        elif(cur_sig==2):
-            Connect_.sendSignal(1,1,self.Port_.data_table)
-            return
+
         
-    def signal_Process(self):
+    def high_temp_process(self):
     #fire signal
         global endTime
         global startTime
-        if (self.Fire_flag):
+        # dht-11 온도
+        self.POST.temperature=self.degrees
+        if (self.degrees >=self.threshold_temp):
             endTime = time.time()                    
             Time = endTime - startTime
             
             if(Time>=0.5):
-                return 1
+                self.high_temp_flag = True
+                return
                 
         else:
             startTime = time.time()
-            Time = startTime - endTime
-            if(Time>=0.5):
-                return 2
-        return 0
+            self.high_temp_flag = False
+            return
     print("GPIO Loading complete")    
