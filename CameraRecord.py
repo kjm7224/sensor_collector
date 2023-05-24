@@ -25,30 +25,28 @@ class Camera():
     Lock = threading.Lock()
     queue = queue.Queue()
     
-    def Read_m3u8(self,p):
+    def Read_m3u8(self,p,pp):
+        
         cnt = 0
         while True:
             try:
                 output = p.stderr.readline().decode()
-                # if('.m3u8' in output):
-                #     cnt+=1
-                #     if (cnt>=2):
-                #         print("ss")
+                
                 if('.ts' in output):
                     
                     str_m3u8Name = self.strPost_FileName+".m3u8"
                     str_tsName = "{strPostName}{cnt}.ts".format(strPostName=self.strPost_FileName,cnt=cnt)
-                    Connect_.postRequest(self.strPostDir,self.strFolderName,str_m3u8Name)
-                    Connect_.postRequest(self.strPostDir,self.strFolderName,str_tsName)    
+                    pp.postRequest(self.strFolderName,str_m3u8Name,str_tsName)
                     cnt+=1
             except:
                 continue
+            
         
     def RecordTS(self,p,frame):
         
         p.stdin.write(frame.tostring())
 
-    def RecordTS_Start(self,setTime):
+    def RecordTS_Start(self,setTime,pp):
         self.strFolderName = "Video"
         Camera.CreateFolder(self.strFolderName)
         now = datetime.now()
@@ -68,7 +66,7 @@ class Camera():
        '-hls_delete_threshold', '1', '-force_key_frames', 'expr:gte(t,n_forced*1)',
        self.m3u8_Name]
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE,stdout = subprocess.PIPE,stderr = subprocess.PIPE)
-        tempThread = threading.Thread(target=self.Read_m3u8,args=(p,))
+        tempThread = threading.Thread(target=self.Read_m3u8,args=(p,pp,))
         tempThread.start()
         return p
     
@@ -98,7 +96,7 @@ class Camera():
         Camera.Data_Write(strTime,strFolderName,strName,strPath)
         
         #post Data
-        Connect_.postRequest(strTempDir,strFolderName,strName)
+        Connect_.postRequest(strFolderName,strName,None)
         
         #use opencv video writer
         
@@ -184,7 +182,7 @@ class Camera():
         Camera.Log_Write(str,strTime)
         print(str)
         #Post Data
-        Connect_.postRequest(strTempDir,strFolderName,strName)
+        Connect_.postRequest(strFolderName,strName,None)
         #Set Db
         #Camera.db.insertDB(strTable,"Image",intTime,strName,strPath)
         #Camera.db.commit()
