@@ -136,7 +136,7 @@ def Camera_Start_(Signal,pp):
                     if not(Signal.empty()):
                         signalData = Signal.get()
                         
-                        if not (bRecord):              #spark signal
+                        if (not bRecord and signalData == 1):              #spark signal
                             bRecordStart = True 
                             time.sleep(0.1)
                             startTime = time.time()

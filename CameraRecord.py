@@ -172,7 +172,6 @@ class Camera():
         strPath = strDir+"/"+strFolderName+"/"+strName
         strTempDir = strDir+"/"+strFolderName
         
-        print(strPath)
         
         #Write Data.txt
         Camera.Data_Write(strTime,"Image",strName,strPath)
