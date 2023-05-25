@@ -24,6 +24,10 @@ class IO():
         self.threshold_temp = 50
         self.degrees = 0
         
+        #for thermal cam debug
+        self.thermal_cam_cur_flag = False
+        self.thermal_cam_pre_flag = False
+        
     def LED_All_TurnDown(self):
         self.LED_TurnDown(self.Fire_OUTPUT)
         self.LED_TurnDown(self.LED1)
@@ -43,7 +47,7 @@ class IO():
     def LED_TurnDown(self,LED_pin):
         GPIO.output(LED_pin,GPIO.LOW)
         
-    def Input(self,signal,output,pp):
+    def Input(self,signal,output,pp,pp_thermal):
         try:
             Fire_sensor = 21
             GPIO.setmode(GPIO.BCM) 
@@ -64,7 +68,7 @@ class IO():
                 try:
                     # post 파이프라인 연결
                     pp.send(self.POST)
-                    
+                    self.thermal_process(pp_thermal,signal,pp)
                     self.OutputSignal(output,signal)
                     self.set_event()
                     #################################
@@ -92,7 +96,22 @@ class IO():
         finally:
             GPIO.cleanup()
         return
-
+    def thermal_process(self,pp_thermal,signal,pp):
+        self.thermal_cam_pre_flag = self.thermal_cam_cur_flag
+        
+        thermal_cam = pp_thermal.receive()
+        
+        if(thermal_cam[0]>=500):
+            self.thermal_cam_cur_flag = True
+        else:
+            self.thermal_cam_cur_flag = False
+        if not (self.thermal_cam_cur_flag == self.thermal_cam_pre_flag):
+            if(self.thermal_cam_cur_flag):
+                signal.put(1)
+            else:
+                signal.put(0)
+        
+        return
     def set_event(self):
         if not (self.high_temp_flag and self.spark_flag):
             self.POST.event=0
@@ -128,8 +147,8 @@ class IO():
                 return
             else:
                 # 열화상 카메라 데이터 출력
-                #print(outputData)
-                signal.put(1)
+                print(outputData)
+                #signal.put(1)
                 
             # detect Fire 
             # dht-11 고온일 경우로 변경
@@ -173,11 +192,11 @@ class IO():
     def QuaterPost(self,b_pre_Post_Flag):
         now = datetime.now()
         strMinute = now.minute
-        if(strMinute%5 == 4):
+        if(strMinute%15 == 4):
             b_pre_Post_Flag=True
             return b_pre_Post_Flag
         
-        elif(strMinute%5 == 0 and b_pre_Post_Flag == True):
+        elif(strMinute%15 == 0 and b_pre_Post_Flag == True):
             b_pre_Post_Flag=False
             self.POST.sendSignal()
             return b_pre_Post_Flag            

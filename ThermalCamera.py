@@ -9,6 +9,7 @@ class Port():
     
     def __init__(self):
         self.ports = serial.tools.list_ports.comports()
+        self.post = Connect()
         self.index = 0
         self.data_list = [None]*10
         self.data_index = 0
@@ -16,14 +17,13 @@ class Port():
         self.data_len = 520
         self.summary_data_len = 24
         self.sensor_temperature = 10
-        self.Fire_triger = 509
+        self.Fire_triger = 500
         self.data_table = ""
         self.prev_data_table =""
-        self.post = Connect()
         self.cur_Fire_flag = False
         self.pre_Fire_flag = False
         self.pre_regular_flag = False
-        
+        self.nData = None
         
     def print_port(self):
         print("there are connected in port some object")
@@ -56,7 +56,7 @@ class Port():
         for list in self.data_list:
             print(list)
     
-    def put_Data(self,arr,outputQue):
+    def put_Data(self,arr):
         col = 0
         self.data_table=""
         for list in self.data_list:
@@ -76,26 +76,24 @@ class Port():
                 for i in range(6,len(list)-4,4):
                     if(i==self.sensor_temperature):
                         result = list[i:i+4]
-                        nData = int(result,16)
+                        self.nData = int(result,16)
                         #for debug 
-                        print(nData)
+                        #print(nData)
                 
-                        #For demo test
-                        if(nData>=self.Fire_triger):
-                            self.cur_Fire_flag  = True
-                            if not(self.cur_Fire_flag==self.pre_Fire_flag):
-                                outputQue.put(1)
-                        else:
-                            self.cur_Fire_flag  = False
-                            if not(self.cur_Fire_flag==self.pre_Fire_flag):
-                                outputQue.put(0)
-                                self.post.send_thermal_cam(0,self.data_table)
+                        # #For demo test
+                        # if(nData>=self.Fire_triger):
+                        #     self.cur_Fire_flag  = True
+                        #     if not(self.cur_Fire_flag==self.pre_Fire_flag):
+                        # else:
+                        #     self.cur_Fire_flag  = False
+                        #     if not(self.cur_Fire_flag==self.pre_Fire_flag):
+                        #         self.post.send_thermal_cam(0,self.data_table)
                             
-                        self.pre_Fire_flag = self.cur_Fire_flag
-        outputQue.put(self.data_table)
+                        # self.pre_Fire_flag = self.cur_Fire_flag
+        # outputQue.put(self.data_table)
         return
     
-    def Thermal_Loop(self,outputQue):
+    def Thermal_Loop(self,pp_thermal):
         self.find_port()
         com = self.initial_sensor()
         
@@ -110,8 +108,8 @@ class Port():
                 if(self.data_index >9):
                     self.data_index=0
                 if(self.data_index==0):
-                    self.put_Data(arr,outputQue)
-                self.post_regular_siganl()
+                    self.put_Data(arr)
+                    pp_thermal.send([self.nData,self.data_table])
             except: 
                 self.print_port()
                 self.find_port()
@@ -119,21 +117,11 @@ class Port():
         
                 print("Thermal Cam has crutial err")  
                 continue  
-            
-    def post_regular_siganl(self):
-        now = datetime.now()
-        strMinute = now.minute
-        if(strMinute % 5 ==4):
-            self.pre_regular_flag = True
-            return
-        elif(strMinute %5==0 and self.pre_regular_flag == True):
-            self.pre_regular_flag = False
-            if(self.cur_Fire_flag==True):
-                self.post.send_thermal_cam(1,self.data_table)    
-            else:
-                self.post.send_thermal_cam(0,self.data_table)
-            return
-            
 
 print("TermalCamera loading complete")
 
+# #debug...
+# from multiprocessing import Queue
+# Pt = Port()
+# q = Queue()
+# Pt.Thermal_Loop(q)

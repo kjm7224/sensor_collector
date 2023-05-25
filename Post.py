@@ -9,11 +9,11 @@ class Connect():
         self.TIME_OUT = 5
         self.HOST_NAME = "localhost:9999"
         self.data = {}
-        self.event = None
-        self.temperature  = None
-        self.flame = None
-        self.status = None
-        self.event = None
+        self.event = "0"
+        self.status = "0"
+        self.temperature  = "0"
+        self.flame = "0"
+        
         
         
         
@@ -39,7 +39,7 @@ class Connect():
                     "image":File_name
                 }
         
-            elif(Format == "Video"):
+            elif(Format == "video"):
                 self.data ={
                     "status":self.status,
                     "event":self.event,
@@ -49,7 +49,7 @@ class Connect():
                     "m3u8":m3u8_name,   # m3u8_name
                 }
             result = requests.post(url,json = self.data,timeout=self.TIME_OUT)
-            
+
             if(result.status_code == self.OK_CONNECT):
                 print("Post success send to img or video")
             else:

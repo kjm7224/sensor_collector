@@ -17,7 +17,6 @@ class Camera():
         self.m3u8_Name = ""
         global Lock
         self.cnt = 0
-        self.strPostdir = ""
         self.strFolderName = ""
         self.strPost_FileName = ""
         self.src = cv2.VideoCapture(0)
@@ -36,7 +35,8 @@ class Camera():
                     
                     str_m3u8Name = self.strPost_FileName+".m3u8"
                     str_tsName = "{strPostName}{cnt}.ts".format(strPostName=self.strPost_FileName,cnt=cnt)
-                    pp.postRequest(self.strFolderName,str_m3u8Name,str_tsName)
+
+                    pp.postRequest(self.strFolderName,str_tsName,str_m3u8Name)
                     cnt+=1
             except:
                 continue
@@ -47,14 +47,14 @@ class Camera():
         p.stdin.write(frame.tostring())
 
     def RecordTS_Start(self,setTime,pp):
-        self.strFolderName = "Video"
+        pp.event = "1"
+        pp.status = "1"
+        self.strFolderName = "video"
         Camera.CreateFolder(self.strFolderName)
         now = datetime.now()
         Time = now.strftime('%m_%d_%H_%M_%S')
         intTime = int(Time)
-        self.m3u8_Name = "Video/"+Time+".m3u8"
-        strDir = os.getcwd()
-        self.strPostDir = strDir+"/"+self.strFolderName
+        self.m3u8_Name = "/home/rndgatev/video/"+Time+".m3u8"
         self.strPost_FileName = Time
         #str_abs_path = os.path.abspath(__file__)
         cmd = ['ffmpeg', '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
@@ -160,8 +160,8 @@ class Camera():
                 
         
     def CaptureImage(self,strTime,frame):
-        strDir = os.getcwd()
-        strFolderName = "Image"
+        strDir = "/home/rndgatev"
+        strFolderName = "img"
         now = datetime.now()
         Time = now.strftime('%m_%d_%H_%M_%S')
         intTime = int(Time)
@@ -171,6 +171,8 @@ class Camera():
         strName = strTime+".jpg"
         strPath = strDir+"/"+strFolderName+"/"+strName
         strTempDir = strDir+"/"+strFolderName
+        
+        print(strPath)
         
         #Write Data.txt
         Camera.Data_Write(strTime,"Image",strName,strPath)
@@ -182,11 +184,8 @@ class Camera():
         Camera.Log_Write(str,strTime)
         print(str)
         #Post Data
-        Connect_.postRequest(strFolderName,strName,None)
-        #Set Db
-        #Camera.db.insertDB(strTable,"Image",intTime,strName,strPath)
-        #Camera.db.commit()
-        
+        Connect_.postRequest("Image",strName,None)
+       
     def Data_Write(Time,Foramt,Name,Path):# data Write
         Camera.CreateFolder("DATA")
         f = open("DATA/Data.txt",'a')
@@ -204,8 +203,9 @@ class Camera():
         f.close()
     
     def CreateFolder(strName):
-        if not os.path.exists(strName):
-            os.makedirs(strName)
+        folder_path = "/home/rndgatev/"+strName
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
 
     def RecordText(frame):
         now = datetime.now()

@@ -23,6 +23,7 @@ outputQue = IO_.OutputQue
 
 # connect Pipe Line
 pp = pipe()
+pp_thermal = pipe()
 
 def main():
     global cam
@@ -38,9 +39,9 @@ def main():
     bCameraOn = False
     cam.bRecordQue = True
     CameraProcess = Process(target=Camera_Start_,args=(Signal,pp,))
-    SensorProcess = Process(target =IO_.Input,args=(Signal,outputQue,pp,))
+    SensorProcess = Process(target =IO_.Input,args=(Signal,outputQue,pp,pp_thermal,))
     #ServerDataProcess = Process(target = svData.Data_Loop,args = (outputQue,))
-    ThermalCameraProcess = Process(target = IO_.Port_.Thermal_Loop,args=(outputQue,))
+    ThermalCameraProcess = Process(target = IO_.Port_.Thermal_Loop,args=(pp_thermal,))
     CameraProcess.start()
     SensorProcess.start()
     #ServerDataProcess.start()
@@ -67,10 +68,10 @@ def exit_handler(self,bsignal):
         SensorProcess.join()
         print('Sensor Process is closed')
     
-    if ServerDataProcess.is_alive():
-        ServerDataProcess.terminate()
-        ServerDataProcess.join()
-        print('ServerDataProcess is closed')
+    # if ServerDataProcess.is_alive():
+    #     ServerDataProcess.terminate()
+    #     ServerDataProcess.join()
+    #     print('ServerDataProcess is closed')
     
     if ThermalCameraProcess.is_alive():
         ThermalCameraProcess.terminate()
@@ -148,10 +149,10 @@ def Camera_Start_(Signal,pp):
                             print("Recording video is stop")
                                                                                                    
                     #Capture processing
-                    if (strMinute % 5 == 4):
+                    if (strMinute % 15 == 4):
                         bCaptureFlag = True
                     
-                    if (strMinute % 5 ==  0 and bCaptureFlag == True):
+                    if (strMinute % 15 ==  0 and bCaptureFlag == True):
                         bCaptureFlag = False
                         cam.CaptureImage(strTime,frame)
 
