@@ -5,6 +5,7 @@ import time
 import os
 from Post import Connect
 from datetime import datetime
+import time
 class Port():
     
     def __init__(self):
@@ -37,21 +38,43 @@ class Port():
                     break
             self.index +=1
             continue
-        print("Found your Theraml Camera port")
+        print("Find port....")
    
     def connect_port(self,bdRate):
- 
-        #serial open
-        com = serial.Serial(self.ports[self.index].device,bdRate)
+        try:
+            #serial open
+            com = serial.Serial(self.ports[self.index].device,bdRate)
+        except:
+            self.ports = serial.tools.list_ports.comports()
+            self.index = 0
+            com = None
         return com
     
-    def initial_sensor(self):
+    def initial_sensor(self,pp_thermal):
+        
         com = self.connect_port(115200)
-        com.write(b'AT+1\r\n')
-        while True:
-            data = com.readline()
-            if(data == b'AT+OK\r\n'):
-                return com
+        if not(com==None):
+            com.write(b'AT+1\r\n')
+            while True:
+                try:
+                    data = com.readline()
+                    if(data == b'AT+OK\r\n'):
+                        return com
+                   
+                    elif(data == b'AT+RDY\r\n'):
+                        com.write(b'AT+1\r\n')
+                    
+                    elif(data == b'\r\n'):    
+                        com.close()
+                        print("port is initilized please wait some seconds")
+                        time.sleep(10)
+                        self.Thermal_Loop(pp_thermal)
+                except:
+                    self.Thermal_Loop(pp_thermal)
+                    continue
+        else:
+            time.sleep(1)
+            self.Thermal_Loop(pp_thermal)
     def debuging(self):
         for list in self.data_list:
             print(list)
@@ -95,10 +118,12 @@ class Port():
     
     def Thermal_Loop(self,pp_thermal):
         self.find_port()
-        com = self.initial_sensor()
+        com = self.initial_sensor(pp_thermal)
         
         #create 32 by 32 table
         arr = [[0 for x in range(32)] for y in range(32)]
+        
+        print("thermal camera is opend")
         while True:
             try:
                 # insert data in byte array[10]
@@ -111,17 +136,17 @@ class Port():
                     self.put_Data(arr)
                     pp_thermal.send([self.nData,self.data_table])
             except: 
-                self.print_port()
+                self.__init__()
                 self.find_port()
-                com = self.initial_sensor()
+                com = self.initial_sensor(pp_thermal)
         
                 print("Thermal Cam has crutial err")  
                 continue  
 
 print("TermalCamera loading complete")
 
-# #debug...
-# from multiprocessing import Queue
+#debug...
+# from Pipe import pipe
 # Pt = Port()
-# q = Queue()
-# Pt.Thermal_Loop(q)
+# pp = pipe
+# Pt.Thermal_Loop(pp)
