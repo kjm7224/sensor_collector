@@ -5,10 +5,15 @@ from multiprocessing import Queue,Lock
 from datetime import datetime
 from ThermalCamera import Port
 from multiprocessing import Pipe
+from Adafruit_Python_DHT.examples.dht_11 import dht_11
+import queue as q
+import threading
 
 lock = Lock()
 class IO():
     def __init__(self):
+        
+        self.dht_11 = dht_11()
         GPIO.setmode(GPIO.BCM)
         self.Fire_Extinguisher_Flag = False
         self.Fire_OUTPUT = 5
@@ -20,9 +25,15 @@ class IO():
         self.POST = Connect()
         self.OutputQue = Queue()
         self.signalQue = Queue()
-        self.evnet = 0
-        self.threshold_temp = 50
+        self.event = "0"
+        self.threshold_temp = 500
         self.degrees = 0
+        self.q_degree = q.Queue()
+        
+        #spark
+        self.cur_spark_flag = 0
+        self.pre_spark_flag = 0
+        
         
         #for thermal cam debug
         self.thermal_cam_cur_flag = False
@@ -46,10 +57,32 @@ class IO():
         
     def LED_TurnDown(self,LED_pin):
         GPIO.output(LED_pin,GPIO.LOW)
-        
+    
+    def dht_11_loop(self):
+        while True:
+            try:
+                degrees,_ = self.dht_11.q_dht()
+                self.q_degree.put(degrees)
+                
+            except:
+                continue
+    def get_degree(self):        
+        if not (self.q_degree.empty()):
+            self.degrees = self.q_degree.get()
+        return
+    def get_spark(self,pin):
+        self.pre_spark_flag = self.cur_spark_flag
+        self.cur_spark_flag = GPIO.input(pin)
+        if (self.Down_Pulse(self.cur_spark_flag,self.pre_spark_flag)):
+            self.spark_flag = True
+
+        elif(self.Up_Pulse(self.cur_spark_flag,self.pre_spark_flag)):
+            self.spark_flag = False
+        return
+    
     def Input(self,signal,output,pp,pp_thermal):
         try:
-            Fire_sensor = 21
+            Fire_sensor = 20
             GPIO.setmode(GPIO.BCM) 
             self.pin_SetUp(Fire_sensor)
             global endTime
@@ -62,7 +95,8 @@ class IO():
             Cur_event= 0
             pre_event = 0
             b_pre_Post_Flag = True
-            
+            dht_11_thread = threading.Thread(target=self.dht_11_loop,args=())
+            dht_11_thread.start()
             #for debug..
             while True:
                 try:
@@ -71,15 +105,12 @@ class IO():
                     self.thermal_process(pp_thermal,signal,pp)
                     self.OutputSignal(output,signal)
                     self.set_event()
-                    #################################
-                    ###########점화장치 on###########
-                    #################################
-                    # uppulse
-                    #################################
-                    ###########점화장치 off###########
-                    #################################
-                    # downpulse
-                    
+                    self.set_record(signal)
+                    #print(self.event)
+                    self.get_degree()
+                    self.get_spark(Fire_sensor)
+                    print(self.event)
+
                     
                     #high temp signal
                     self.high_temp_process()   
@@ -101,7 +132,7 @@ class IO():
         
         thermal_cam = pp_thermal.receive()
         
-        if(thermal_cam[0]>=500):
+        if(thermal_cam[0]>=500 and thermal_cam[0]<=20000):
             self.thermal_cam_cur_flag = True
         else:
             self.thermal_cam_cur_flag = False
@@ -113,24 +144,28 @@ class IO():
         
         return
     def set_event(self):
-        if not (self.high_temp_flag and self.spark_flag):
-            self.POST.event=0
-            self.evnet = self.POST.event
+        if (not self.high_temp_flag and not self.spark_flag):
+            self.POST.event="0"
+            self.event = self.POST.event
             return self.POST.event
         
         elif (not self.high_temp_flag and self.spark_flag):
-            self.POST.event=1
-            self.evnet = self.POST.event
+            self.POST.event="1"
+            self.event = self.POST.event
             return self.POST.event
         
         elif (self.high_temp_flag and not self.spark_flag):
-            self.POST.event=2
-            self.evnet = self.POST.event
+            self.POST.event="2"
+            self.event = self.POST.event
             return self.POST.event
         else:
-            self.POST.event=3
+            self.event = "3"
+            self.POST.event="3"
             
             return self.POST.event
+    def set_record(self,signal):
+        if not (self.event=="0"):
+            signal.put(1)
     
     def OutputSignal(self,output,signal):
         # Thermal 카메라의 데이터 테이블 받아오기
@@ -145,10 +180,10 @@ class IO():
                 print("ALL LED is initialized")
                 self.LED_All_TurnDown(self)
                 return
-            else:
-                # 열화상 카메라 데이터 출력
-                print(outputData)
-                #signal.put(1)
+            # else:
+            #     # 열화상 카메라 데이터 출력
+            #     print(outputData)
+            #     #signal.put(1)
                 
             # detect Fire 
             # dht-11 고온일 경우로 변경
@@ -170,12 +205,12 @@ class IO():
         self.LED_TurnUP(self,self.Fire_OUTPUT)
 
 
-    def Up_Pulse(current_state,previous_state):
+    def Up_Pulse(self,current_state,previous_state):
         if(current_state == 1 and previous_state == 0):
             return True
         return False            
         
-    def Down_Pulse(current_state,previous_state):
+    def Down_Pulse(self,current_state,previous_state):
         if(current_state == 0 and previous_state == 1):
             return True
         return False
@@ -223,3 +258,4 @@ class IO():
             self.high_temp_flag = False
             return
     print("GPIO Loading complete")    
+
