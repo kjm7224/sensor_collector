@@ -35,6 +35,14 @@ $ sudo apt install postgresql
 
 # query postgresql version
 $ dpkg -l | grep postgresql
+
+# how to install dht-11 library
+1. $ git clone https://github.com/adafruit/Adafruit_Python_DHT.git 
+2. $ cd Adafruit_Python_DHT
+3. $ sudo python setup.py install
+
+and then, you can see this log is written "Finished processing dependencies for Adafruit-DHT==1.4.0"
+
 ```
 
 ## Flow Chart
