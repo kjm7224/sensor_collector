@@ -52,8 +52,7 @@ class Camera():
         self.strFolderName = "video"
         Camera.CreateFolder(self.strFolderName)
         now = datetime.now()
-        Time = now.strftime('%m_%d_%H_%M_%S')
-        intTime = int(Time)
+        Time = now.strftime('%y%m%d_%H%M%S')
         self.m3u8_Name = "/home/rndgatev/video/"+Time+".m3u8"
         self.strPost_FileName = Time
         #str_abs_path = os.path.abspath(__file__)
@@ -163,12 +162,13 @@ class Camera():
         strDir = "/home/rndgatev"
         strFolderName = "img"
         now = datetime.now()
-        Time = now.strftime('%m_%d_%H_%M_%S')
-        intTime = int(Time)
+        Time = now.strftime('%y%m%d_%H%M%S')
         
         # Create Forder
         Camera.CreateFolder(strFolderName)
-        strName = strTime+".jpg"
+        strName = Time+".jpg"
+        
+        
         strPath = strDir+"/"+strFolderName+"/"+strName
         strTempDir = strDir+"/"+strFolderName
         

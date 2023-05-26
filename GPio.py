@@ -38,7 +38,59 @@ class IO():
         #for thermal cam debug
         self.thermal_cam_cur_flag = False
         self.thermal_cam_pre_flag = False
-        
+    def Input(self,signal,output,pp,pp_thermal):
+        try:
+            Fire_sensor = 20
+            GPIO.setmode(GPIO.BCM) 
+            self.pin_SetUp(Fire_sensor)
+            global endTime
+            global startTime
+            self.Led_SetUp(self.LED1)
+            self.Led_SetUp(self.LED2)
+            self.Led_SetUp(self.Fire_OUTPUT)
+            endTime = 0
+            startTime=0
+            Cur_event= 0
+            pre_event = 0
+            b_pre_Post_Flag = True
+            dht_11_thread = threading.Thread(target=self.dht_11_loop,args=())
+            dht_11_thread.start()
+            #for debug..
+            while True:
+                try:
+                    Cur_event = self.event
+                    
+                    # post 파이프라인 연결
+                    pp.send(self.POST)
+                    #열화상 데이터 수신
+                    self.thermal_process(pp_thermal,signal,pp)
+                    # 화재 진압 트리거 신호
+                    self.OutputSignal(output,signal)
+                    # 이벤트 설정
+                    self.set_event()
+                    # if 이벤트 != 0,녹화,continue
+                    self.set_record(signal)
+                    # 온도 센서 받아오기 -> Q
+                    self.get_degree()
+                    # 불꽃 감지 센서 받아오기
+                    self.get_spark(Fire_sensor)
+
+                    
+                    # 온도 센서 일정 온도 이상시 이상 플래그  on
+                    self.high_temp_process()   
+                    
+                    #이벤트 변경시 녹화신호
+                    self.put_signal_Data(signal,Cur_event,pre_event)
+
+                    #Post regular signal
+                    b_pre_Post_Flag = self.QuaterPost(b_pre_Post_Flag)
+                    Cur_event = pre_event
+                except:
+                    continue
+                    
+        finally:
+            GPIO.cleanup()
+        return        
     def LED_All_TurnDown(self):
         self.LED_TurnDown(self.Fire_OUTPUT)
         self.LED_TurnDown(self.LED1)
@@ -80,53 +132,7 @@ class IO():
             self.spark_flag = False
         return
     
-    def Input(self,signal,output,pp,pp_thermal):
-        try:
-            Fire_sensor = 20
-            GPIO.setmode(GPIO.BCM) 
-            self.pin_SetUp(Fire_sensor)
-            global endTime
-            global startTime
-            self.Led_SetUp(self.LED1)
-            self.Led_SetUp(self.LED2)
-            self.Led_SetUp(self.Fire_OUTPUT)
-            endTime = 0
-            startTime=0
-            Cur_event= 0
-            pre_event = 0
-            b_pre_Post_Flag = True
-            dht_11_thread = threading.Thread(target=self.dht_11_loop,args=())
-            dht_11_thread.start()
-            #for debug..
-            while True:
-                try:
-                    # post 파이프라인 연결
-                    pp.send(self.POST)
-                    self.thermal_process(pp_thermal,signal,pp)
-                    self.OutputSignal(output,signal)
-                    self.set_event()
-                    self.set_record(signal)
-                    #print(self.event)
-                    self.get_degree()
-                    self.get_spark(Fire_sensor)
-                    print(self.event)
 
-                    
-                    #high temp signal
-                    self.high_temp_process()   
-                    
-                    #이벤트 변경시 녹화신호
-                    self.put_signal_Data(signal,Cur_event,pre_event)
-
-                    #Post regular signal
-                    b_pre_Post_Flag = self.QuaterPost(b_pre_Post_Flag)
-                    Cur_event = pre_event
-                except:
-                    continue
-                 
-        finally:
-            GPIO.cleanup()
-        return
     def thermal_process(self,pp_thermal,signal,pp):
         self.thermal_cam_pre_flag = self.thermal_cam_cur_flag
         
@@ -136,11 +142,13 @@ class IO():
             self.thermal_cam_cur_flag = True
         else:
             self.thermal_cam_cur_flag = False
-        if not (self.thermal_cam_cur_flag == self.thermal_cam_pre_flag):
-            if(self.thermal_cam_cur_flag):
-                signal.put(1)
-            else:
-                signal.put(0)
+        
+        # 열화상 카메라 일정 온도 이상시 녹화
+        # if not (self.thermal_cam_cur_flag == self.thermal_cam_pre_flag):
+        #     if(self.thermal_cam_cur_flag):
+        #         signal.put(1)
+        #     else:
+        #         signal.put(0)
         
         return
     def set_event(self):
@@ -161,8 +169,8 @@ class IO():
         else:
             self.event = "3"
             self.POST.event="3"
-            
             return self.POST.event
+        
     def set_record(self,signal):
         if not (self.event=="0"):
             signal.put(1)
