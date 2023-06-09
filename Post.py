@@ -13,6 +13,11 @@ class Connect():
         self.status = "0"
         self.temperature  = "0"
         self.flame = "0"
+        self.humidity = None
+        self.thermal = None
+        # 초기 이벤트 발생 당시
+        self.detect_status = None
+        self.detect_event = None
         
         
         
@@ -25,7 +30,7 @@ class Connect():
         print(result.text)        
         print(result.status_code)
     
-    def postRequest(self,Format,File_name,m3u8_name):
+    def postRequest(self,Format,File_name,m3u8_name,jpg_name):
         
         try:
             self.data = {}
@@ -35,21 +40,26 @@ class Connect():
                     "status":self.status,
                     "event":self.event,
                     "temperature":self.temperature,
+                    "humidity":self.humidity,
+                    "flame":self.flame,
+                    "thermal:":self.thermal,
                     "flame":self.flame,
                     "image":File_name
                 }
         
             elif(Format == "video"):
                 self.data ={
-                    "status":self.status,
-                    "event":self.event,
+                    "status":self.detect_status,
+                    "event":self.detect_event,
                     "temperature":self.temperature,
+                    "humidity":self.humidity,
                     "flame":self.flame,
+                    "thermal:":self.thermal,
                     "video":File_name, # ts_name
                     "m3u8":m3u8_name,   # m3u8_name
+                    "image":jpg_name
                 }
             result = requests.post(url,json = self.data,timeout=self.TIME_OUT)
-
             if(result.status_code == self.OK_CONNECT):
                 print("Post success send to img or video")
             else:

@@ -89,3 +89,4 @@ class DatabaseClass():
     def close(self):
         self.db.close()
         
+    print("Database Loading complete")
