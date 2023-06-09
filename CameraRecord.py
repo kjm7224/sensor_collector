@@ -19,41 +19,53 @@ class Camera():
         self.cnt = 0
         self.strFolderName = ""
         self.strPost_FileName = ""
-        self.src = cv2.VideoCapture(0)
         
+        self.frame = None
+        self.pp = None
     Lock = threading.Lock()
     queue = queue.Queue()
     
-    def Read_m3u8(self,p,pp):
+    def Read_m3u8(self,p,startTime,set_time):
         
         cnt = 0
         while True:
-            try:
-                output = p.stderr.readline().decode()
-                
-                if('.ts' in output):
+            endtime = time.time()
+            
+            #check time
+            # ch_start_time = time.time()
+            
+            if(endtime-startTime<=set_time):
+                try:
+                    output = p.stderr.readline().decode()
                     
-                    str_m3u8Name = self.strPost_FileName+".m3u8"
-                    str_tsName = "{strPostName}{cnt}.ts".format(strPostName=self.strPost_FileName,cnt=cnt)
-
-                    pp.postRequest(self.strFolderName,str_tsName,str_m3u8Name)
-                    cnt+=1
-            except:
-                continue
+                    if('.ts' in output):
+                        str_m3u8Name = self.strPost_FileName+".m3u8"
+                        str_tsName = "{strPostName}{cnt}.ts".format(strPostName=self.strPost_FileName,cnt=cnt)
+                        now = datetime.now()
+                        strTime = now.strftime('%Y_%m_%d_%H_%M_%S')
+                        image_name=Camera.CaptureImage(self,strTime,self.frame,self.pp,"video")
+                        self.pp.postRequest(self.strFolderName,str_tsName,str_m3u8Name,image_name)
+                        cnt+=1
+                        
+                
+                except:
+                    continue
+               
+            else:
+                return
             
         
-    def RecordTS(self,p,frame):
-        
+    def RecordTS(self,p,frame,pp):
+        self.pp = pp
         p.stdin.write(frame.tostring())
+        self.frame = frame
 
-    def RecordTS_Start(self,setTime,pp):
-        pp.event = "1"
-        pp.status = "1"
+    def RecordTS_Start(self,setTime,pp,startTime,set_time):
         self.strFolderName = "video"
         Camera.CreateFolder(self.strFolderName)
         now = datetime.now()
         Time = now.strftime('%y%m%d_%H%M%S')
-        self.m3u8_Name = "/home/rndgatev/video/"+Time+".m3u8"
+        self.m3u8_Name = "/home/szbaijie/video/"+Time+".m3u8"
         self.strPost_FileName = Time
         #str_abs_path = os.path.abspath(__file__)
         cmd = ['ffmpeg', '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
@@ -61,11 +73,11 @@ class Camera():
        '-i', '-', '-c:v', 'libx264',
        '-pix_fmt', 'yuv420p', '-preset', 'ultrafast',
        '-f', 'hls', '-hls_time', setTime,
-       '-hls_list_size', '3', '-hls_flags', 'delete_segments',
+       '-hls_list_size', '60', '-hls_flags', 'delete_segments',
        '-hls_delete_threshold', '1', '-force_key_frames', 'expr:gte(t,n_forced*1)',
        self.m3u8_Name]
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE,stdout = subprocess.PIPE,stderr = subprocess.PIPE)
-        tempThread = threading.Thread(target=self.Read_m3u8,args=(p,pp,))
+        tempThread = threading.Thread(target=self.Read_m3u8,args=(p,startTime,set_time,))
         tempThread.start()
         return p
     
@@ -92,7 +104,7 @@ class Camera():
         #Camera.db.commit()
         
         #Write Data.txt
-        Camera.Data_Write(strTime,strFolderName,strName,strPath)
+        #Camera.Data_Write(strTime,strFolderName,strName,strPath)
         
         #post Data
         Connect_.postRequest(strFolderName,strName,None)
@@ -119,15 +131,16 @@ class Camera():
                 
                 str = "recording complete"
                 print(str)
-                Camera.Log_Write(str,strTime)
+                #Camera.Log_Write(str,strTime)
                 break
         return False
 
 
-    def Camera_Start(self):                         # Camera Setting
-        self.src.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.src.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        return self.src
+    def Camera_Start(self,cap):                         # Camera Setting
+        
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        return cap
 
     def openCam(src):                           # catch Open Cam
         return src.isOpened()
@@ -140,7 +153,7 @@ class Camera():
         global StartTime
         StartTime = time.time()
         print(str)
-        Camera.Log_Write(str,strTime)
+        #Camera.Log_Write(str,strTime)
         Camera.queue.put(frame)
        
         Record_Thread = threading.Thread(target=Camera.Record,args=(strTime,30,))
@@ -153,13 +166,13 @@ class Camera():
        
         else:
             str = "Record end"
-            Camera.Log_Write(str,strTime)
+            #Camera.Log_Write(str,strTime)
             print("record end")
             return False
                 
         
-    def CaptureImage(self,strTime,frame):
-        strDir = "/home/rndgatev"
+    def CaptureImage(self,strTime,frame,pp,format):
+        strDir = "/home/szbaijie"
         strFolderName = "img"
         now = datetime.now()
         Time = now.strftime('%y%m%d_%H%M%S')
@@ -174,16 +187,22 @@ class Camera():
         
         
         #Write Data.txt
-        Camera.Data_Write(strTime,"Image",strName,strPath)
+        #Camera.Data_Write(strTime,"Image",strName,strPath)
         
         
         
         cv2.imwrite(strPath,frame)
         str = "CaptureImage"
-        Camera.Log_Write(str,strTime)
+        #Camera.Log_Write(str,strTime)
         print(str)
         #Post Data
-        Connect_.postRequest("Image",strName,None)
+        try:
+            if (format == "image"):
+                pp.postRequest("Image",strName,None,None)
+        except:
+            print("image capture post has err \r\n post object doesn't have attribute")
+            return strName
+        return strName
        
     def Data_Write(Time,Foramt,Name,Path):# data Write
         Camera.CreateFolder("DATA")
@@ -195,14 +214,16 @@ class Camera():
     
 
         
-    def Log_Write(strMessage,strTime):#로그 기록
+    def Log_Write(strMessage2,strMessage):#로그 기록
+        now = datetime.now()
+        strTime = now.strftime('%Y_%m_%d_%H_%M_%S')
         Camera.CreateFolder("LOG")
-        f = open("LOG/Log_Sequence.txt",'w')
+        f = open("LOG/Log_Sequence.txt",'a')
         f.write("["+strTime+"]"+strMessage)
         f.close()
     
     def CreateFolder(strName):
-        folder_path = "/home/rndgatev/"+strName
+        folder_path = "/home/szbaijie/"+strName
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -226,6 +247,15 @@ class Camera():
             return record
         return False
 
+    def detect_frame(self,frame,q):
+        cv2.imshow("TEST_IMG",frame)
+        cv2.waitKey(1)
+        q.put(frame)
+        if(q.qsize()>=5):
+            q.get()
+        return    
+        
+        
     def RecordShow(self,frame):
         #Record cam
         RecordFrame = Camera.RecordText(frame)

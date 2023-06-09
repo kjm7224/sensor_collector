@@ -26,6 +26,8 @@ class Port():
         self.pre_regular_flag = False
         self.nData = None
         
+        self.start_flag = True
+        
     def print_port(self):
         print("there are connected in port some object")
         for port in self.ports:
@@ -51,30 +53,37 @@ class Port():
         return com
     
     def initial_sensor(self,pp_thermal):
-        
         com = self.connect_port(115200)
-        if not(com==None):
-            com.write(b'AT+1\r\n')
-            while True:
-                try:
+        while True:
+            try:
+                
+                if not(com==None):
                     data = com.readline()
+                    if(self.start_flag):
+                        com.write(b'AT+1\r\n')
+                        
                     if(data == b'AT+OK\r\n'):
                         return com
-                   
+                
                     elif(data == b'AT+RDY\r\n'):
                         com.write(b'AT+1\r\n')
                     
-                    elif(data == b'\r\n'):    
+                    elif(data == b'=================== Main Menu ============================\r\n'):  
+                        self.start_flag = False  
                         com.close()
                         print("port is initilized please wait some seconds")
-                        time.sleep(10)
-                        self.Thermal_Loop(pp_thermal)
-                except:
-                    self.Thermal_Loop(pp_thermal)
-                    continue
-        else:
-            time.sleep(1)
-            self.Thermal_Loop(pp_thermal)
+                        time.sleep(15)
+                        
+                else:
+                    time.sleep(1)
+                    # 그냥 에러나서 다시 들어오게 함 
+                    return
+            except:
+                self.__init__()
+                self.start_flag= False
+                self.Thermal_Loop(pp_thermal)
+                continue
+        
     def debuging(self):
         for list in self.data_list:
             print(list)
@@ -118,6 +127,7 @@ class Port():
     
     def Thermal_Loop(self,pp_thermal):
         self.find_port()
+        # self.find_port()
         com = self.initial_sensor(pp_thermal)
         
         #create 32 by 32 table
@@ -134,9 +144,11 @@ class Port():
                     self.data_index=0
                 if(self.data_index==0):
                     self.put_Data(arr)
-                    pp_thermal.send([self.nData,self.data_table])
+                    #pp_thermal.send([self.nData,self.data_table])
             except: 
+                time.sleep(1)
                 self.__init__()
+                self.start_flag = False
                 self.find_port()
                 com = self.initial_sensor(pp_thermal)
         
@@ -145,8 +157,3 @@ class Port():
 
 print("TermalCamera loading complete")
 
-#debug...
-# from Pipe import pipe
-# Pt = Port()
-# pp = pipe
-# Pt.Thermal_Loop(pp)

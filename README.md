@@ -6,17 +6,43 @@
     This website shows you how to install opencv.
     해당 웹사이트를 참조하여 opencv를 설치한다.
 
+## how to install env 
+```
+# install yolov5 code
+$ git clone https://github.com/ultralytics/yolov5  
+
+# install yov5 env (this has also opencv lib)
+$ cd yolov5
+$ pip install requirements.txt
+
+# install ffmepg
+$ sudo apt install ffmpeg
+
+# install dht-11
+$ git clone https://github.com/adafruit/Adafruit_Python_DHT.git 
+$ cd Adafruit_Python_DHT
+$ sudo python3 setup.py develop --force-pi
+
+# install serial
+$ pip install pyserial
+
+
+
+```
 
 ## checking your Version 
 
 - [ ] python version 3.9.2
 - [ ] opencv version 4.7.0
 - [ ] Rpi.GPIO 0.7.0
-- [ ] ffmpeg 4.3.5-0
+- [ ] ffmpeg 3.4.11
 - [ ] postgresql 13
+- [ ] pyserial-3.5
 ```
 # query openCV version
-$ python -c "import cv2; print(cv2.__version__)"
+code : 
+    import cv2
+    print(cv2.__version__)
 
 # query python version
 $ python --version
@@ -36,13 +62,8 @@ $ sudo apt install postgresql
 # query postgresql version
 $ dpkg -l | grep postgresql
 
-# how to install dht-11 library
-1. $ git clone https://github.com/adafruit/Adafruit_Python_DHT.git 
-2. $ cd Adafruit_Python_DHT
-3. $ sudo python setup.py install
-
-and then, you can see this log is written "Finished processing dependencies for Adafruit-DHT==1.4.0"
-
+# qeury pyserial
+$ pip show pyserial
 ```
 
 ## Flow Chart

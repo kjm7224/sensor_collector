@@ -1,11 +1,11 @@
-import RPi.GPIO as GPIO     # 라즈베리파이 GPIO 관련 모듈을 불러옴
+#import RPi.GPIO as GPIO     # 라즈베리파이 GPIO 관련 모듈을 불러옴
 import time                 # 시간관련 모듈을 불러옴
 from Post import Connect
 from multiprocessing import Queue,Lock
 from datetime import datetime
 from ThermalCamera import Port
 from multiprocessing import Pipe
-from Adafruit_Python_DHT.examples.dht_11 import dht_11
+from dht_11 import dht_11
 import queue as q
 import threading
 
@@ -28,6 +28,7 @@ class IO():
         self.event = "0"
         self.threshold_temp = 500
         self.degrees = 0
+        self.humidity = 0
         self.q_degree = q.Queue()
         
         #spark
@@ -50,8 +51,8 @@ class IO():
             self.Led_SetUp(self.Fire_OUTPUT)
             endTime = 0
             startTime=0
-            Cur_event= 0
-            pre_event = 0
+            Cur_event= '0'
+            pre_event = '0'
             b_pre_Post_Flag = True
             dht_11_thread = threading.Thread(target=self.dht_11_loop,args=())
             dht_11_thread.start()
@@ -82,10 +83,11 @@ class IO():
                     #이벤트 변경시 녹화신호
                     self.put_signal_Data(signal,Cur_event,pre_event)
 
-                    #Post regular signal
-                    b_pre_Post_Flag = self.QuaterPost(b_pre_Post_Flag)
-                    Cur_event = pre_event
+                    # #Post regular signal
+                    # b_pre_Post_Flag = self.QuaterPost(b_pre_Post_Flag)
+                    # pre_event = Cur_event
                 except:
+                    print("sensor_err")
                     continue
                     
         finally:
@@ -113,23 +115,31 @@ class IO():
     def dht_11_loop(self):
         while True:
             try:
-                degrees,_ = self.dht_11.q_dht()
-                self.q_degree.put(degrees)
+                humidity,degrees = self.dht_11.q_dht()
+                degrees = round(degrees,1)
+                humidity = round(humidity,1)
+                self.q_degree.put([degrees,humidity])
                 
             except:
                 continue
     def get_degree(self):        
         if not (self.q_degree.empty()):
-            self.degrees = self.q_degree.get()
+            ntemp = self.q_degree.get()
+            self.degrees = ntemp[0]
+            self.humidity = ntemp[1]
+            print(ntemp[0],ntemp[1])
         return
+    
     def get_spark(self,pin):
         self.pre_spark_flag = self.cur_spark_flag
         self.cur_spark_flag = GPIO.input(pin)
         if (self.Down_Pulse(self.cur_spark_flag,self.pre_spark_flag)):
             self.spark_flag = True
+            self.POST.flame = "1"
 
         elif(self.Up_Pulse(self.cur_spark_flag,self.pre_spark_flag)):
             self.spark_flag = False
+            self.POST.flame = "0"
         return
     
 
@@ -137,7 +147,7 @@ class IO():
         self.thermal_cam_pre_flag = self.thermal_cam_cur_flag
         
         thermal_cam = pp_thermal.receive()
-        
+        self.POST.thermal = thermal_cam[1]
         if(thermal_cam[0]>=500 and thermal_cam[0]<=20000):
             self.thermal_cam_cur_flag = True
         else:
@@ -153,27 +163,40 @@ class IO():
         return
     def set_event(self):
         if (not self.high_temp_flag and not self.spark_flag):
-            self.POST.event="0"
+            self.POST.event ="0"
+            self.POST.status = "0"
             self.event = self.POST.event
+            self.status = self.POST.status
             return self.POST.event
         
         elif (not self.high_temp_flag and self.spark_flag):
             self.POST.event="1"
+            self.POST.status="1"
             self.event = self.POST.event
+            self.status = self.POST.status
             return self.POST.event
         
         elif (self.high_temp_flag and not self.spark_flag):
             self.POST.event="2"
+            self.POST.status="1"
             self.event = self.POST.event
+            self.status = self.POST.status
             return self.POST.event
         else:
             self.event = "3"
+            self.POST.status = "2"
+            self.status = self.POST.status
             self.POST.event="3"
             return self.POST.event
         
     def set_record(self,signal):
         if not (self.event=="0"):
+            self.POST.detect_event = self.event
+            self.POST.detect_status = self.status
             signal.put(1)
+            
+        else:
+            signal.put(0)
     
     def OutputSignal(self,output,signal):
         # Thermal 카메라의 데이터 테이블 받아오기
@@ -253,6 +276,7 @@ class IO():
         global startTime
         # dht-11 온도
         self.POST.temperature=self.degrees
+        self.POST.humidity = self.humidity
         if (self.degrees >=self.threshold_temp):
             endTime = time.time()                    
             Time = endTime - startTime
